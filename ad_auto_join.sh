@@ -66,4 +66,7 @@ remove_local_user
 
 sudo systemctl restart sssd
 
-echo "Fertig! Bitte mit einem AD-Konto anmelden."
+echo "Fertig! Das System wird jetzt neu gestartet. Bitte mit einem AD-Konto anmelden."
+
+# Neustart des Systems
+sudo reboot
