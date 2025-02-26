@@ -109,6 +109,32 @@ Nach erfolgreichem Abschluss des Skripts und dem Neustart des Systems können si
   sudo systemctl restart sssd
   ```
 
+## So könnte ein PowerShell-Skript zur Vorbereitung von Active Directory für Linux-Clients aussehen
+
+``` powershell
+# 1. Domänen-Admin für Linux-Beitritte erstellen
+$LinuxAdminUser = "linuxjoin"
+$LinuxAdminPass = ConvertTo-SecureString "DeinSicheresPasswort" -AsPlainText -Force
+New-ADUser -Name $LinuxAdminUser -SamAccountName $LinuxAdminUser -UserPrincipalName "$LinuxAdminUser@deine.domain" -PasswordNeverExpires $true -PassThru | Enable-ADAccount
+Set-ADUser -Identity $LinuxAdminUser -Password $LinuxAdminPass
+Add-ADGroupMember -Identity "Domain Admins" -Members $LinuxAdminUser
+
+# 2. Computer-Konto für Linux erlauben (optional)
+Set-ADDefaultDomainPasswordPolicy -ComplexityEnabled $false -MinPasswordLength 8
+
+# 3. DNS-Forwarding für Linux-Clients sicherstellen
+Add-DnsServerForwarder -IPAddress 8.8.8.8 -PassThru
+
+# 4. Kerberos für Linux-Clients konfigurieren
+Set-ADServiceAccount -Identity krbtgt -ServicePrincipalNames @{Add="HTTP/deine.domain"}
+Restart-Service KDC
+
+# 5. Gruppenrichtlinien für Linux-Clients anpassen (GPO, optional)
+New-GPO -Name "Linux-Clients" | New-GPLink -Target "OU=Linux,DC=deine,DC=domain"
+
+Write-Host "Active Directory ist für Linux-Clients vorbereitet!"
+```
+
 ## Lizenz
 
 Dieses Projekt ist unter der Beerware-Lizenz lizenziert - siehe die [LICENSE](LICENSE)-Datei für Details.
