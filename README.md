@@ -1,91 +1,116 @@
+# Active Directory Integration für Linux
 
-## **1. Was machen die verwendeten Programme?**  
+Dieses Skript automatisiert die Integration eines Linux-Rechners in eine Windows Active Directory (AD)-Domäne, sodass sich Benutzer mit ihren AD-Anmeldeinformationen am Linux-Rechner anmelden können.
 
-### **a) Authentifizierung & Domänenbeitritt**  
-| **Paket**            | **Funktion** |
-|----------------------|-------------|
-| **realmd**          | Erlaubt es, Linux einfach in eine Windows-Domäne aufzunehmen. |
-| **sssd**            | (System Security Services Daemon) Verwaltet Benutzer- und Gruppendaten aus AD und sorgt für Authentifizierung. |
-| **krb5-user**       | Stellt die Kerberos-Client-Tools bereit, die für AD-Logins benötigt werden. |
-| **adcli**           | Ein Tool, das den Computer in die Domäne aufnimmt (Beitritt, Accounts verwalten, etc.). |
-| **samba-common-bin**| Enthält `net` und `wbinfo`, um Domänen-Informationen abzufragen. |
-| **packagekit**      | Wird von `realmd` genutzt, um automatisch die richtigen Pakete zu installieren. |
-| **oddjob & oddjob-mkhomedir** (bei RHEL) | Erstellt automatisch Home-Verzeichnisse für AD-Benutzer. |
+## Voraussetzungen
 
-### **b) Gruppenrichtlinien (GPO) & Netzwerklaufwerke (optional)**
-| **Paket**            | **Funktion** |
-|----------------------|-------------|
-| **cifs-utils**      | Ermöglicht das Einhängen von Windows-Netzlaufwerken. |
-| **samba**           | Falls Drucker- oder Dateifreigaben nötig sind. |
-| **krb5-workstation** (RHEL) | Erlaubt Kerberos-Anfragen (z. B. Single Sign-On für Netzwerkdienste). |
+- Ein funktionierendes Active Directory (AD) mit einem verfügbaren DNS-Server.
+- Die IP-Adresse des AD-Servers.
+- Ein **Administrator**-Konto für das Joinen der Domäne.
+- Die Linux-Distribution muss eine der unterstützten Versionen sein (Ubuntu, Debian, Fedora, CentOS, RHEL, Arch, openSUSE).
 
----
+## Voraussetzungen auf dem Linux-Rechner
 
-## **2. Was muss serverseitig angepasst werden?**  
+- Der Linux-Rechner muss eine Netzwerkverbindung zum AD-Server haben.
+- Die Uhrzeit des Linux-Rechners muss mit dem AD-Server synchronisiert sein (wichtig für Kerberos).
+- Der Linux-Rechner muss den DNS-Server des AD-Servers nutzen können.
 
-Damit sich Linux-Clients erfolgreich mit AD verbinden können, sind folgende Schritte notwendig:
+### Unterstützte Distributionen
 
-### **a) Active Directory vorbereiten**  
-1. **DNS-Einträge prüfen:**  
-   - Linux-Clients müssen den AD-Server als DNS-Server nutzen.  
-   - Überprüfen mit:  
-     ```powershell
-     nslookup domain.local
-     ```
-   - Falls Linux den AD-Server nicht auflösen kann, müssen die DNS-Zonen in AD überprüft werden.
+Das Skript funktioniert mit folgenden Distributionen:
+- Ubuntu/Debian
+- Fedora/CentOS/RHEL
+- Arch Linux
+- openSUSE/SUSE
 
-2. **Zeitsynchronisation sicherstellen:**  
-   - AD verwendet Kerberos, das strikte Zeitvorgaben hat.  
-   - Linux muss mit dem AD-Zeitserver synchronisiert sein:  
-     ```bash
-     sudo timedatectl set-ntp on
-     ```
+### Installierte Pakete
 
-3. **Computerobjekte in AD erlauben:**  
-   - Standardmäßig dürfen normale Benutzer **max. 10 PCs** in die Domäne aufnehmen.  
-   - Falls nötig, ein Admin-User anlegen, der unbeschränkt PCs hinzufügen darf.
+- `realmd`: Ermöglicht das Beitreten zu einer AD-Domäne.
+- `sssd`: Verwendet Kerberos für die Authentifizierung und stellt die Benutzerinformationen bereit.
+- `krb5-user`: Kerberos-Pakete für die Kommunikation mit dem AD-Server.
+- `adcli`: Hilft beim Beitritt zu einer AD-Domäne.
+- `samba`: Notwendig für die Interaktion mit Windows-Servern.
 
-4. **Kerberos & GPO-Support für Linux aktivieren (optional):**  
-   - Falls du Gruppenrichtlinien für Linux nutzen willst, brauchst du eine **Samba-GPO-Erweiterung**.  
-   - Überprüfen, ob die `sysvol`-Freigabe auf dem AD-Server erreichbar ist:  
-     ```bash
-     smbclient -L //domain.local -U Administrator
-     ```
+## Verwendung
 
----
+### 1. Klonen des Repositories
 
-## **3. Wie läuft der Prozess ab?**
-1. **Linux-Client installiert oder Skript ausgeführt**
-2. **Linux setzt den DNS-Server auf den AD-Server**
-3. **Kerberos prüft den AD-Server & erstellt ein Ticket**
-4. **Mit `adcli` wird der Rechner der Domäne hinzugefügt**
-5. **`sssd` konfiguriert die Authentifizierung für AD-Nutzer**
-6. **Login mit Windows-Domänenaccount ist möglich!**
+Zuerst müssen Sie das Repository auf Ihrem Linux-Rechner klonen:
 
-
-
-##  So könnte ein PowerShell-Skript zur Vorbereitung von Active Directory für Linux-Clients aussehen
-
-``` powershell
-# 1. Domänen-Admin für Linux-Beitritte erstellen
-$LinuxAdminUser = "linuxjoin"
-$LinuxAdminPass = ConvertTo-SecureString "DeinSicheresPasswort" -AsPlainText -Force
-New-ADUser -Name $LinuxAdminUser -SamAccountName $LinuxAdminUser -UserPrincipalName "$LinuxAdminUser@deine.domain" -PasswordNeverExpires $true -PassThru | Enable-ADAccount
-Set-ADUser -Identity $LinuxAdminUser -Password $LinuxAdminPass
-Add-ADGroupMember -Identity "Domain Admins" -Members $LinuxAdminUser
-
-# 2. Computer-Konto für Linux erlauben (optional)
-Set-ADDefaultDomainPasswordPolicy -ComplexityEnabled $false -MinPasswordLength 8
-
-# 3. DNS-Forwarding für Linux-Clients sicherstellen
-Add-DnsServerForwarder -IPAddress 8.8.8.8 -PassThru
-
-# 4. Kerberos für Linux-Clients konfigurieren
-Set-ADServiceAccount -Identity krbtgt -ServicePrincipalNames @{Add="HTTP/deine.domain"}
-Restart-Service KDC
-
-# 5. Gruppenrichtlinien für Linux-Clients anpassen (GPO, optional)
-New-GPO -Name "Linux-Clients" | New-GPLink -Target "OU=Linux,DC=deine,DC=domain"
-
-Write-Host "Active Directory ist für Linux-Clients vorbereitet!"
+```bash
+git clone https://github.com/DudeTux42/vb-auto-join.git
+cd vb-auto-join
 ```
+
+### 2. Skript ausführen
+
+Stellen Sie sicher, dass das Skript ausführbar ist:
+
+```bash
+chmod +x ad_auto_join.sh
+```
+
+Führen Sie dann das Skript mit Administratorrechten aus:
+
+```bash
+sudo ./ad_auto_join.sh
+```
+
+Das Skript wird die folgenden Schritte ausführen:
+1. Erkennung der Distribution und Installation der notwendigen Pakete.
+2. Konfiguration der DNS-Auflösung für den AD-Server.
+3. Beitritt des Linux-Rechners zur Active Directory-Domäne.
+4. Aktivierung der Anmeldung mit AD-Konten.
+5. Löschen des lokalen Benutzers und Neustart des Systems, sodass sich der Benutzer mit seinen AD-Anmeldeinformationen anmelden kann.
+
+### 3. Eingabeaufforderungen
+
+Während des Skriptlaufs müssen Sie:
+- Das **Administrator-Passwort** für das Active Directory eingeben, um den Rechner in die Domäne aufzunehmen.
+- Das Skript wird dann den lokalen Benutzer löschen und den Rechner neu starten.
+
+### 4. Anmeldung mit AD-Konto
+
+Nach dem Neustart können sich alle Benutzer, die in der AD-Domäne existieren, mit ihren AD-Anmeldeinformationen am Linux-Rechner anmelden.
+
+## Serverseitige Anforderungen
+
+Auf der Serverseite müssen folgende Punkte beachtet werden:
+1. **Active Directory Benutzer**: Alle Benutzer, die sich am Linux-Rechner anmelden möchten, müssen im AD vorhanden sein.
+2. **DNS-Konfiguration**: Der DNS-Server des AD muss korrekt konfiguriert sein, damit der Linux-Rechner den AD-Server auflösen kann.
+3. **Zeit-Synchronisation**: Der Linux-Rechner muss mit dem AD-Server in der Zeit synchronisiert sein (wichtig für Kerberos).
+4. **Gruppen und Berechtigungen**: Standardmäßig dürfen sich alle AD-Benutzer anmelden. Wenn Sie den Zugang auf bestimmte Gruppen beschränken möchten, können Sie dies mit `realm permit` tun.
+
+### Konfiguration der Berechtigungen
+
+Um den Zugriff auf bestimmte Gruppen zu beschränken, können Sie beispielsweise nur den "Domain Admins"-Benutzern die Anmeldung erlauben:
+
+```bash
+sudo realm permit -g "Domain Admins"
+```
+
+### SSH-Zugriff (optional)
+
+Wenn Benutzer über SSH auf den Linux-Rechner zugreifen möchten, stellen Sie sicher, dass **PAM** (Pluggable Authentication Modules) korrekt konfiguriert ist:
+
+- Überprüfen Sie, dass in der `/etc/ssh/sshd_config` Datei die Zeile `UsePAM yes` gesetzt ist.
+- Überprüfen Sie die `/etc/sssd/sssd.conf` Datei, um sicherzustellen, dass die AD-Konfiguration korrekt ist.
+
+### Testen der Anmeldung
+
+Nach erfolgreichem Abschluss des Skripts und dem Neustart des Systems können sich Benutzer über den Login-Bildschirm oder per SSH mit ihren AD-Konten anmelden.
+
+## Fehlerbehebung
+
+- **"Could not resolve DNS" Fehler**: Stellen Sie sicher, dass der DNS-Server korrekt auf den AD-Server zeigt.
+- **"Kerberos authentication failed"**: Überprüfen Sie die Zeit des Linux-Rechners und stellen Sie sicher, dass sie mit dem AD-Server synchronisiert ist.
+- **SSSD-Fehler**: Wenn SSSD nach dem Beitritt zur Domäne nicht funktioniert, versuchen Sie, den Dienst manuell neu zu starten:
+  ```bash
+  sudo systemctl restart sssd
+  ```
+
+## Lizenz
+
+Dieses Projekt ist unter der Beerware-Lizenz lizenziert - siehe die [LICENSE](LICENSE)-Datei für Details.
+
+---
