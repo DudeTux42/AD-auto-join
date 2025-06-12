@@ -38,8 +38,8 @@ Das Skript funktioniert mit folgenden Distributionen:
 Zuerst müssen Sie das Repository auf Ihrem Linux-Rechner klonen:
 
 ```bash
-git clone https://github.com/DudeTux42/vb-auto-join.git
-cd vb-auto-join
+git clone https://github.com/DudeTux42/AD-auto-join.git
+cd AD-auto-join
 ```
 
 ### 2. Skript ausführen
